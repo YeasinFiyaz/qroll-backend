@@ -58,6 +58,10 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
+  // Database connection limit still reached after waiting: tell the app to retry.
+  if (db.isBusyError(err)) {
+    return res.status(503).json({ error: 'Server is busy, please try again in a moment' });
+  }
   res.status(500).json({ error: 'Server error, please try again' });
 });
 

@@ -49,9 +49,9 @@ async function poolQuery(...args) {
     try {
       return await pool.query(...args);
     } catch (err) {
-      const limited = LIMIT_ERRORS.has(err.code);
-      if ((limited && attempt < 8) || (RETRYABLE.has(err.code) && attempt < 1)) {
-        await sleep(Math.min(200 * 2 ** attempt, 2000) + Math.random() * 150);
+      const limited = LIMIT_ERRORS.has(err.code) && attempt < 14;
+      if (limited || (RETRYABLE.has(err.code) && attempt < 1)) {
+        await sleep(Math.min(250 * 2 ** attempt, 2500) + Math.random() * 400);
         continue;
       }
       throw err;
@@ -75,14 +75,18 @@ function releaseSlot() {
 
 async function connect() {
   await acquireSlot();
+  const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     try {
       const conn = await mysql.createConnection(config);
       await conn.query("SET time_zone = '+00:00'");
       return conn;
     } catch (err) {
-      if ((LIMIT_ERRORS.has(err.code) && attempt < 10) || (RETRYABLE.has(err.code) && attempt < 2)) {
-        await sleep(Math.min(200 * 2 ** attempt, 2000) + Math.random() * 200);
+      // When the host's connection limit is hit, wait (up to ~30s) for another
+      // request to finish instead of failing the user's request.
+      const limited = LIMIT_ERRORS.has(err.code) && Date.now() - started < 30000;
+      if (limited || (RETRYABLE.has(err.code) && attempt < 2)) {
+        await sleep(Math.min(250 * 2 ** attempt, 2500) + Math.random() * 400);
         continue;
       }
       releaseSlot();
@@ -147,6 +151,7 @@ const db = {
   end: () => pool.end(),
   requestScope,
   serverless,
+  isBusyError: (err) => LIMIT_ERRORS.has(err && err.code),
 };
 
 module.exports = db;
