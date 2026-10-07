@@ -65,6 +65,41 @@ Scanning a QR automatically enrols the student in that course.
 | `GET /reports/low-attendance` | teacher | – | students below the threshold (default 75 %) across the teacher's courses |
 | `POST /reports/send-alerts/:course_id` | teacher (owner) | – | `{ message, sent, failed }` — emails every student below the threshold; `503` if email is not configured |
 
+## Settings (feature switches)
+
+| Method & path | Auth | Body / query | Returns |
+| --- | --- | --- | --- |
+| `GET /settings` | – | – | `{ features }` — every switch with its current value (admins always bypass switches) |
+| `GET /settings/labels` | admin | – | human-readable label per switch |
+| `PUT /settings/features` | admin | `{ features: { "<key>": true/false } }` | `{ message, features }` |
+
+Switch keys: `teacher.stats`, `teacher.running_sessions`, `teacher.start_attendance`, `teacher.recent_sessions`,
+`teacher.my_courses`, `teacher.needs_attention`, `teacher.page_courses`, `teacher.page_reports`,
+`teacher.can_create_course`, `teacher.can_delete_course`, `teacher.can_email_alerts`, `student.overall`,
+`student.my_courses`, `student.recent_checkins`, `student.low_warning`, `student.page_scan`,
+`student.page_history`, `global.registration`, `global.registration_teacher`.
+Off switches hide the panel/page in the app **and** are enforced by the API (`403`).
+
+## Admin
+
+All admin routes require the `admin` role. Accounts whose email is listed in the `ADMIN_EMAILS`
+environment variable are promoted to admin automatically on register/login.
+
+| Method & path | Body / query | Returns |
+| --- | --- | --- |
+| `GET /admin/overview` | `tz` | site-wide counts (`students`, `teachers`, `admins`, `courses`, `sessions`, `live_sessions`, `attendances`, `scans_today`, `new_users_week`) plus `recentUsers[]` and `recentSessions[]` |
+| `GET /admin/users` | `role`, `q` | every account with `course_count`, `enrolled_count`, `attendance_count` |
+| `GET /admin/teachers` | – | teachers (and admins) for dropdowns |
+| `POST /admin/users` | `name`, `email`, `password`, `role` | `201` `{ user_id }` |
+| `PUT /admin/users/:id` | any of `name`, `email`, `role`, `password` | `{ message }` — can't demote yourself or a teacher who still owns courses |
+| `DELETE /admin/users/:id` | – | `{ message, attendances, courses }` — removes the user and everything they own (can't delete yourself) |
+| `GET /admin/courses` | – | all courses with `teacher_name`, counts |
+| `POST /admin/courses` | `course_name`, `course_code`, `teacher_id` | `201` `{ course_id }` |
+| `PUT /admin/courses/:id` | `course_name`, `course_code`, `teacher_id` | `{ message }` — reassigns the course to another teacher |
+
+Admins may also call every teacher route; `GET /courses/my-courses`, `/sessions/active`, `/sessions/history`,
+`/reports/overview` and `/reports/low-attendance` then cover **all** teachers, and `DELETE /courses/:id` works on any course.
+
 ## Other
 
 | Method & path | Returns |
