@@ -126,27 +126,48 @@ router.put('/users/:id', async (req, res) => {
   res.json({ message: 'User updated' });
 });
 
-// Deleting a user removes everything that belongs to them.
+// Removes a user and everything that belongs to them (inside a transaction).
+async function deleteUserCascade(q, id) {
+  // As a student
+  const [att] = await q('DELETE FROM attendances WHERE student_id = ?', [id]);
+  await q('DELETE FROM enrollments WHERE student_id = ?', [id]);
+  // As a teacher: their courses and everything under them
+  await q('DELETE a FROM attendances a JOIN sessions s ON s.session_id = a.session_id JOIN courses c ON c.course_id = s.course_id WHERE c.teacher_id = ?', [id]);
+  await q('DELETE s FROM sessions s JOIN courses c ON c.course_id = s.course_id WHERE c.teacher_id = ?', [id]);
+  await q('DELETE e FROM enrollments e JOIN courses c ON c.course_id = e.course_id WHERE c.teacher_id = ?', [id]);
+  const [courses] = await q('DELETE FROM courses WHERE teacher_id = ?', [id]);
+  await q('DELETE FROM password_resets WHERE user_id = ?', [id]).catch(() => {});
+  await q('DELETE FROM users WHERE user_id = ?', [id]);
+  return { attendances: att.affectedRows, courses: courses.affectedRows };
+}
+
 router.delete('/users/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (id === req.user.user_id) return res.status(400).json({ error: 'You cannot delete your own account' });
   const [rows] = await db.query('SELECT * FROM users WHERE user_id = ?', [id]);
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const removed = await db.transaction(async (q) => {
-    // As a student
-    const [att] = await q('DELETE FROM attendances WHERE student_id = ?', [id]);
-    await q('DELETE FROM enrollments WHERE student_id = ?', [id]);
-    // As a teacher: their courses and everything under them
-    await q('DELETE a FROM attendances a JOIN sessions s ON s.session_id = a.session_id JOIN courses c ON c.course_id = s.course_id WHERE c.teacher_id = ?', [id]);
-    await q('DELETE s FROM sessions s JOIN courses c ON c.course_id = s.course_id WHERE c.teacher_id = ?', [id]);
-    await q('DELETE e FROM enrollments e JOIN courses c ON c.course_id = e.course_id WHERE c.teacher_id = ?', [id]);
-    const [courses] = await q('DELETE FROM courses WHERE teacher_id = ?', [id]);
-    await q('DELETE FROM users WHERE user_id = ?', [id]);
-    return { attendances: att.affectedRows, courses: courses.affectedRows };
-  });
+  const removed = await db.transaction((q) => deleteUserCascade(q, id));
   res.json({ message: `${user.name} deleted`, ...removed });
+});
+
+// Delete several users at once (e.g. cleaning up test accounts).
+router.post('/users/bulk-delete', async (req, res) => {
+  const ids = [...new Set((req.body?.ids || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+    .filter((id) => id !== req.user.user_id);
+  if (ids.length === 0) return res.status(400).json({ error: 'No users selected' });
+  if (ids.length > 200) return res.status(400).json({ error: 'Select at most 200 users at a time' });
+  const totals = await db.transaction(async (q) => {
+    let users = 0, courses = 0, attendances = 0;
+    for (const id of ids) {
+      const [rows] = await q('SELECT user_id FROM users WHERE user_id = ?', [id]);
+      if (!rows[0]) continue;
+      const r = await deleteUserCascade(q, id);
+      users += 1; courses += r.courses; attendances += r.attendances;
+    }
+    return { users, courses, attendances };
+  });
+  res.json({ message: `${totals.users} user(s) deleted (with ${totals.courses} course(s))`, ...totals });
 });
 
 // ---------- courses ----------

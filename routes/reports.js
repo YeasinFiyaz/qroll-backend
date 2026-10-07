@@ -143,6 +143,13 @@ router.get('/student/:id/summary', authMiddleware, async (req, res) => {
   if (req.user.role === 'student' && id !== req.user.user_id) {
     return res.status(403).json({ error: 'Not allowed' });
   }
+  if (req.user.role === 'teacher') {
+    const [[{ n }]] = await db.query(
+      'SELECT COUNT(*) AS n FROM enrollments e JOIN courses c ON c.course_id = e.course_id WHERE e.student_id = ? AND c.teacher_id = ?',
+      [id, req.user.user_id]
+    );
+    if (!n) return res.status(403).json({ error: 'This student is not enrolled in any of your courses' });
+  }
   res.json(await studentSummary(id));
 });
 
