@@ -1,10 +1,13 @@
 {
-  "name": "backend",
+  "name": "qroll-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "QRoll smart QR attendance API",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "init-db": "node scripts/init-db.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -17,9 +20,10 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.6",
-    "node-cron": "^4.6.0",
     "nodemailer": "^9.0.3",
-    "qrcode": "^1.5.4",
-    "socket.io": "^4.8.3"
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
