@@ -158,4 +158,24 @@ router.put('/:id', authMiddleware, teacherOnly, async (req, res) => {
   }
 });
 
+// DELETE COURSE — owner only; removes its sessions, attendance and enrollments too
+router.delete('/:id', authMiddleware, teacherOnly, async (req, res) => {
+  const course = await ownedCourse(req.user, req.params.id);
+  if (!course) return res.status(404).json({ error: 'Course not found' });
+  // The client must echo the course code so a course can't be deleted by accident.
+  const confirm = String(req.body?.confirm_code || '').trim().toUpperCase();
+  if (confirm !== course.course_code.toUpperCase()) {
+    return res.status(400).json({ error: `Type the course code (${course.course_code}) to confirm` });
+  }
+  const id = course.course_id;
+  const removed = await db.transaction(async (q) => {
+    await q('DELETE a FROM attendances a JOIN sessions s ON s.session_id = a.session_id WHERE s.course_id = ?', [id]);
+    const [sessions] = await q('DELETE FROM sessions WHERE course_id = ?', [id]);
+    const [enrollments] = await q('DELETE FROM enrollments WHERE course_id = ?', [id]);
+    await q('DELETE FROM courses WHERE course_id = ?', [id]);
+    return { sessions: sessions.affectedRows, enrollments: enrollments.affectedRows };
+  });
+  res.json({ message: `${course.course_code} deleted`, ...removed });
+});
+
 module.exports = router;

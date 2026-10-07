@@ -146,8 +146,40 @@ function requestScope(req, res, next) {
   scope.run(store, next);
 }
 
+// Runs fn(query) inside one transaction on a single connection, in both modes.
+async function transaction(fn) {
+  let conn;
+  let release;
+  if (serverless) {
+    const store = scope.getStore();
+    if (store) {
+      if (!store.conn) store.conn = connect();
+      conn = await store.conn;
+      release = async () => {};
+    } else {
+      conn = await connect();
+      release = () => close(conn);
+    }
+  } else {
+    conn = await pool.getConnection();
+    release = async () => conn.release();
+  }
+  try {
+    await conn.beginTransaction();
+    const result = await fn((...args) => conn.query(...args));
+    await conn.commit();
+    return result;
+  } catch (err) {
+    try { await conn.rollback(); } catch (e) { /* connection already gone */ }
+    throw err;
+  } finally {
+    await release();
+  }
+}
+
 const db = {
   query: (...args) => (serverless ? scopedQuery(...args) : poolQuery(...args)),
+  transaction,
   end: () => pool.end(),
   requestScope,
   serverless,
