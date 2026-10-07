@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { getFeatures } = require('../utils/settings');
+const { loginLimit, loginEmailLimit, registerLimit, forgotLimit, resetLimit } = require('../middleware/rateLimit');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,7 +29,7 @@ function signToken(user) {
 }
 
 // REGISTER
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimit, async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
@@ -71,7 +72,7 @@ router.post('/register', async (req, res) => {
 });
 
 // LOGIN
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimit, loginEmailLimit, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
@@ -120,7 +121,7 @@ function frontendBase() {
 }
 
 // Always answers the same way so nobody can probe which emails exist.
-router.post('/forgot', async (req, res) => {
+router.post('/forgot', forgotLimit, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const reply = () => res.json({ message: 'If an account exists for that email, a reset link has been sent. Check your inbox (and spam folder).' });
   if (!EMAIL_RE.test(email)) return reply();
@@ -146,7 +147,7 @@ router.post('/forgot', async (req, res) => {
   reply();
 });
 
-router.post('/reset', async (req, res) => {
+router.post('/reset', resetLimit, async (req, res) => {
   const token = String(req.body.token || '').trim();
   const password = String(req.body.password || '');
   if (!/^[a-f0-9]{64}$/.test(token)) return res.status(400).json({ error: 'This reset link is invalid' });
