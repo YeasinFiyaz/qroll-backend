@@ -15,6 +15,8 @@ Base URL: `https://qroll-backend-five.vercel.app/api/v1`
 | `POST /auth/login` | – | `email`, `password` | `{ token, user: { id, name, email, role } }` |
 | `GET /auth/me` | any | – | `{ user }` |
 | `PUT /auth/password` | any | `current_password`, `new_password` | `{ message }` |
+| `POST /auth/forgot` | – | `email` | always `{ message }` (`503` if email isn't configured); sends a 30-minute single-use reset link |
+| `POST /auth/reset` | – | `token`, `password` | `{ token, user }` — logs the user in |
 
 Tokens last 7 days (`JWT_EXPIRES_IN`). Emails are case-insensitive.
 
