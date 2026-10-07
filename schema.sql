@@ -57,3 +57,13 @@ CREATE TABLE IF NOT EXISTS settings (
   value       TEXT NOT NULL,
   updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- One-time password reset tokens (only the SHA-256 hash of the token is stored).
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash CHAR(64) PRIMARY KEY,
+  user_id    INT NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at    DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);

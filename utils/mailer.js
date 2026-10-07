@@ -61,4 +61,29 @@ const sendLowAttendanceAlert = async (studentEmail, studentName, courseName, per
   await getTransporter().sendMail(mailOptions);
 };
 
-module.exports = { sendLowAttendanceAlert, mailerConfigured };
+const sendPasswordReset = async (email, name, link) => {
+  await getTransporter().sendMail({
+    from: `"QRoll Attendance System" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Reset your QRoll password',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 24px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: #fff; margin: 0; font-size: 26px;">QRoll</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 4px 0 0 0;">Smart Attendance System</p>
+        </div>
+        <div style="background: #fff; padding: 32px; border: 1px solid #eee; border-radius: 0 0 12px 12px;">
+          <p style="color: #333; font-size: 15px;">Hi <b>${escapeHtml(name)}</b>,</p>
+          <p style="color: #555; font-size: 15px;">We received a request to reset the password for your QRoll account. Click the button below to choose a new password. The link works for <b>30 minutes</b>.</p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="${link}" style="background: #5b4bff; color: #fff; text-decoration: none; padding: 14px 26px; border-radius: 10px; font-weight: bold; display: inline-block;">Reset password</a>
+          </p>
+          <p style="color: #888; font-size: 13px;">If the button doesn't work, copy this link into your browser:<br><a href="${link}" style="color: #5b4bff; word-break: break-all;">${link}</a></p>
+          <p style="color: #888; font-size: 13px; margin-top: 24px;">If you didn't ask for this, you can ignore this email — your password will stay the same.</p>
+        </div>
+      </div>
+    `,
+  });
+};
+
+module.exports = { sendLowAttendanceAlert, sendPasswordReset, mailerConfigured };
