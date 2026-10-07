@@ -22,6 +22,7 @@ app.use(cors({
   },
 }));
 app.use(express.json({ limit: '100kb' }));
+app.use(db.requestScope);
 
 app.get('/', (req, res) => {
   res.json({ message: 'QRoll API is running!' });
