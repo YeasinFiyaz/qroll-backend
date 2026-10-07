@@ -31,6 +31,7 @@ See [`.env.example`](.env.example) for every variable. The important ones:
 | `JWT_SECRET` | Secret used to sign login tokens |
 | `FRONTEND_URL` | Allowed CORS origin(s), comma separated; also used to build QR links |
 | `EMAIL_USER`, `EMAIL_PASS` | Gmail address + app password for low-attendance alerts (optional) |
+| `ADMIN_EMAILS` | Comma-separated emails that are promoted to **admin** automatically on register/login |
 
 ## Endpoints
 
@@ -43,9 +44,11 @@ See [docs/API.md](docs/API.md) for request and response details.
 | Courses | `POST /courses/create`, `GET /courses/my-courses`, `GET /courses/enrolled`, `POST /courses/enroll`, `GET /courses/:id/students`, `DELETE /courses/:id/students/:studentId`, `PUT /courses/:id`, `DELETE /courses/:id` |
 | Sessions | `POST /sessions/start`, `GET /sessions/active`, `GET /sessions/history`, `PUT /sessions/:id/close`, `GET /sessions/:id/live` |
 | Attendance | `POST /attend/scan`, `GET /attend/my-history`, `GET /attend/session/:id` |
+| Settings | `GET /settings`, `GET /settings/labels`, `PUT /settings/features` |
+| Admin | `GET /admin/overview`, `GET /admin/users`, `POST /admin/users`, `PUT /admin/users/:id`, `DELETE /admin/users/:id`, `GET /admin/teachers`, `GET /admin/courses`, `POST /admin/courses`, `PUT /admin/courses/:id` |
 | Reports | `GET /reports/overview`, `GET /reports/course/:id`, `GET /reports/course/:id/sessions`, `GET /reports/me/summary`, `GET /reports/low-attendance`, `POST /reports/send-alerts/:course_id` |
 
 ## Database
 
-Five tables: `users`, `courses`, `enrollments`, `sessions`, `attendances`
+Six tables: `users`, `courses`, `enrollments`, `sessions`, `attendances`, `settings`
 (see [`schema.sql`](schema.sql)). All timestamps are stored and compared in UTC.
