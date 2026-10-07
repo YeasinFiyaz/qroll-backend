@@ -4,8 +4,16 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { getFeatures } = require('../utils/settings');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Accounts whose email is listed in ADMIN_EMAILS become admins automatically
+// (on register and on every login), so no password ever has to be shared.
+const ADMIN_EMAILS = new Set(
+  String(process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+);
+const isBootstrapAdmin = (email) => ADMIN_EMAILS.has(String(email).toLowerCase());
 
 function publicUser(u) {
   return { id: u.user_id, name: u.name, email: u.email, role: u.role };
@@ -24,8 +32,18 @@ router.post('/register', async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
+  const features = await getFeatures();
+  const bootstrapAdmin = isBootstrapAdmin(email);
+
+  if (!features['global.registration'] && !bootstrapAdmin) {
+    return res.status(403).json({ error: 'Sign-up is currently closed. Please contact the administrator.' });
+  }
   // Admin accounts can't be self-created from the public sign-up form.
-  const role = req.body.role === 'teacher' ? 'teacher' : 'student';
+  let role = req.body.role === 'teacher' ? 'teacher' : 'student';
+  if (role === 'teacher' && !features['global.registration_teacher'] && !bootstrapAdmin) {
+    return res.status(403).json({ error: 'Teacher sign-up is closed. Ask the administrator to create your account.' });
+  }
+  if (bootstrapAdmin) role = 'admin';
 
   if (name.length < 2) return res.status(400).json({ error: 'Please enter your full name' });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Please enter a valid email' });
@@ -63,6 +81,10 @@ router.post('/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
+  if (user.role !== 'admin' && isBootstrapAdmin(user.email)) {
+    await db.query("UPDATE users SET role = 'admin' WHERE user_id = ?", [user.user_id]);
+    user.role = 'admin';
+  }
   res.json({ token: signToken(user), user: publicUser(user) });
 });
 
@@ -70,7 +92,9 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   const [rows] = await db.query('SELECT * FROM users WHERE user_id = ?', [req.user.user_id]);
   if (!rows[0]) return res.status(401).json({ error: 'Account not found' });
-  res.json({ user: publicUser(rows[0]) });
+  // Role may have changed (e.g. promoted by an admin): hand back a fresh token too.
+  const user = rows[0];
+  res.json({ user: publicUser(user), token: user.role !== req.user.role ? signToken(user) : undefined });
 });
 
 // CHANGE PASSWORD

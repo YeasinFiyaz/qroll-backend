@@ -4,9 +4,10 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { teacherOnly, studentOnly } = authMiddleware;
 const { ownedCourse } = require('../utils/ownership');
+const { requireFeature } = require('../utils/settings');
 
 // CREATE COURSE
-router.post('/create', authMiddleware, teacherOnly, async (req, res) => {
+router.post('/create', authMiddleware, teacherOnly, requireFeature('teacher.can_create_course'), async (req, res) => {
   const course_name = String(req.body.course_name || '').trim();
   const course_code = String(req.body.course_code || '').trim().toUpperCase();
   if (!course_name || !course_code) {
@@ -26,17 +27,18 @@ router.post('/create', authMiddleware, teacherOnly, async (req, res) => {
   }
 });
 
-// GET MY COURSES (teacher) — with student and session counts
+// GET MY COURSES (teacher) — with student and session counts. Admins see every course.
 router.get('/my-courses', authMiddleware, teacherOnly, async (req, res) => {
+  const all = req.user.role === 'admin';
   const [rows] = await db.query(
-    `SELECT c.*,
+    `SELECT c.*, u.name AS teacher_name,
        (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.course_id) AS student_count,
        (SELECT COUNT(*) FROM sessions s WHERE s.course_id = c.course_id) AS session_count,
        (SELECT MAX(s.created_at) FROM sessions s WHERE s.course_id = c.course_id) AS last_session_at
-     FROM courses c
-     WHERE c.teacher_id = ?
+     FROM courses c JOIN users u ON u.user_id = c.teacher_id
+     ${all ? '' : 'WHERE c.teacher_id = ?'}
      ORDER BY c.created_at DESC`,
-    [req.user.user_id]
+    all ? [] : [req.user.user_id]
   );
   res.json(rows);
 });
@@ -159,7 +161,7 @@ router.put('/:id', authMiddleware, teacherOnly, async (req, res) => {
 });
 
 // DELETE COURSE — owner only; removes its sessions, attendance and enrollments too
-router.delete('/:id', authMiddleware, teacherOnly, async (req, res) => {
+router.delete('/:id', authMiddleware, teacherOnly, requireFeature('teacher.can_delete_course'), async (req, res) => {
   const course = await ownedCourse(req.user, req.params.id);
   if (!course) return res.status(404).json({ error: 'Course not found' });
   // The client must echo the course code so a course can't be deleted by accident.

@@ -4,6 +4,7 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { teacherOnly, studentOnly } = authMiddleware;
 const { ownedSession } = require('../utils/ownership');
+const { requireFeature } = require('../utils/settings');
 
 // Accepts the raw token or a full scan URL (…/scan?t=TOKEN) pasted by the student.
 function extractToken(input) {
@@ -18,7 +19,7 @@ function coord(value, limit) {
 }
 
 // MARK ATTENDANCE — student scans QR
-router.post('/scan', authMiddleware, studentOnly, async (req, res) => {
+router.post('/scan', authMiddleware, studentOnly, requireFeature('student.page_scan'), async (req, res) => {
   const token = extractToken(req.body.token);
   if (!token) return res.status(400).json({ error: 'Session code is required' });
 

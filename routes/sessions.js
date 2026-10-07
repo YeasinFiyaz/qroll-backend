@@ -58,21 +58,23 @@ router.post('/start', authMiddleware, teacherOnly, async (req, res) => {
 
 // ACTIVE SESSIONS of this teacher — lets the dashboard resume after a refresh
 router.get('/active', authMiddleware, teacherOnly, async (req, res) => {
+  const all = req.user.role === 'admin';
   const [rows] = await db.query(
     `SELECT s.session_id, s.course_id, s.token, s.expires_at, s.created_at,
        c.course_name, c.course_code, NOW() AS server_now,
        (SELECT COUNT(*) FROM attendances a WHERE a.session_id = s.session_id) AS present_count
      FROM sessions s JOIN courses c ON c.course_id = s.course_id
-     WHERE c.teacher_id = ? AND ${LIVE_SQL}
+     WHERE ${all ? '1=1' : 'c.teacher_id = ?'} AND ${LIVE_SQL}
      ORDER BY s.created_at DESC`,
-    [req.user.user_id]
+    all ? [] : [req.user.user_id]
   );
   res.json(rows);
 });
 
 // SESSION HISTORY
 router.get('/history', authMiddleware, teacherOnly, async (req, res) => {
-  const params = [req.user.user_id];
+  const all = req.user.role === 'admin';
+  const params = all ? [] : [req.user.user_id];
   let courseFilter = '';
   if (req.query.course_id) {
     courseFilter = 'AND s.course_id = ?';
@@ -86,7 +88,7 @@ router.get('/history', authMiddleware, teacherOnly, async (req, res) => {
        (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = s.course_id) AS enrolled_count
      FROM sessions s
      JOIN courses c ON s.course_id = c.course_id
-     WHERE c.teacher_id = ? ${courseFilter}
+     WHERE ${all ? '1=1' : 'c.teacher_id = ?'} ${courseFilter}
      ORDER BY s.created_at DESC
      LIMIT 200`,
     params

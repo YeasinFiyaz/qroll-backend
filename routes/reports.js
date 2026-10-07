@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { teacherOnly } = authMiddleware;
 const { ownedCourse } = require('../utils/ownership');
 const { sendLowAttendanceAlert, mailerConfigured } = require('../utils/mailer');
+const { requireFeature } = require('../utils/settings');
 
 const THRESHOLD = Number(process.env.LOW_ATTENDANCE_THRESHOLD) || 75;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -55,18 +56,21 @@ async function courseReport(courseId, query = {}) {
 // TEACHER OVERVIEW — numbers for the dashboard cards
 router.get('/overview', authMiddleware, teacherOnly, async (req, res) => {
   const uid = req.user.user_id;
+  // Admins get site-wide numbers: the teacher filter matches every course.
+  const T = req.user.role === 'admin' ? '(? IS NOT NULL)' : 'c.teacher_id = ?';
+  const TC = req.user.role === 'admin' ? '(? IS NOT NULL)' : 'teacher_id = ?';
   // "Today" in the viewer's timezone: tz = minutes east of UTC (e.g. 360 for Dhaka).
   const tz = Math.max(-840, Math.min(840, Number(req.query.tz) || 0));
   const [[totals]] = await db.query(
     `SELECT
-       (SELECT COUNT(*) FROM courses WHERE teacher_id = ?) AS courses,
+       (SELECT COUNT(*) FROM courses WHERE ${TC}) AS courses,
        (SELECT COUNT(DISTINCT e.student_id) FROM enrollments e
-          JOIN courses c ON c.course_id = e.course_id WHERE c.teacher_id = ?) AS students,
+          JOIN courses c ON c.course_id = e.course_id WHERE ${T}) AS students,
        (SELECT COUNT(*) FROM sessions s
-          JOIN courses c ON c.course_id = s.course_id WHERE c.teacher_id = ?) AS sessions,
+          JOIN courses c ON c.course_id = s.course_id WHERE ${T}) AS sessions,
        (SELECT COUNT(*) FROM attendances a JOIN sessions s ON s.session_id = a.session_id
           JOIN courses c ON c.course_id = s.course_id
-          WHERE c.teacher_id = ?
+          WHERE ${T}
             AND DATE(DATE_ADD(a.marked_at, INTERVAL ? MINUTE)) = DATE(DATE_ADD(NOW(), INTERVAL ? MINUTE))) AS scans_today`,
     [uid, uid, uid, uid, tz, tz]
   );
@@ -77,7 +81,7 @@ router.get('/overview', authMiddleware, teacherOnly, async (req, res) => {
        JOIN courses c ON c.course_id = e.course_id
        JOIN sessions s ON s.course_id = e.course_id
        LEFT JOIN attendances a ON a.session_id = s.session_id AND a.student_id = e.student_id
-       WHERE c.teacher_id = ?
+       WHERE ${T}
        GROUP BY e.student_id, e.course_id
      ) t`,
     [uid]
@@ -144,6 +148,7 @@ router.get('/student/:id/summary', authMiddleware, async (req, res) => {
 
 // LOW ATTENDANCE STUDENTS across this teacher's courses
 router.get('/low-attendance', authMiddleware, teacherOnly, async (req, res) => {
+  const T = req.user.role === 'admin' ? '(? IS NOT NULL)' : 'c.teacher_id = ?';
   const [rows] = await db.query(
     `SELECT
        u.name, u.email, c.course_id, c.course_name, c.course_code,
@@ -156,7 +161,7 @@ router.get('/low-attendance', authMiddleware, teacherOnly, async (req, res) => {
      JOIN courses c ON c.course_id = e.course_id
      JOIN sessions s ON s.course_id = e.course_id
      LEFT JOIN attendances a ON a.session_id = s.session_id AND a.student_id = e.student_id
-     WHERE c.teacher_id = ?
+     WHERE ${T}
      GROUP BY e.student_id, e.course_id, u.name, u.email, c.course_id, c.course_name, c.course_code
      HAVING percentage < ?
      ORDER BY percentage ASC`,
@@ -166,7 +171,7 @@ router.get('/low-attendance', authMiddleware, teacherOnly, async (req, res) => {
 });
 
 // SEND LOW ATTENDANCE EMAIL ALERTS
-router.post('/send-alerts/:course_id', authMiddleware, teacherOnly, async (req, res) => {
+router.post('/send-alerts/:course_id', authMiddleware, teacherOnly, requireFeature('teacher.can_email_alerts'), async (req, res) => {
   const course = await ownedCourse(req.user, req.params.course_id);
   if (!course) return res.status(404).json({ error: 'Course not found' });
   if (!mailerConfigured()) {

@@ -46,6 +46,8 @@ app.use('/api/v1/sessions', require('./routes/sessions'));
 app.use('/api/v1/attend',   require('./routes/attend'));
 app.use('/api/v1/reports',  require('./routes/reports'));
 app.use('/api/v1/courses',  require('./routes/courses'));
+app.use('/api/v1/settings', require('./routes/settings'));
+app.use('/api/v1/admin',    require('./routes/admin'));
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

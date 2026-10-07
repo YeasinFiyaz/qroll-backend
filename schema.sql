@@ -50,3 +50,10 @@ CREATE TABLE IF NOT EXISTS attendances (
   FOREIGN KEY (session_id) REFERENCES sessions(session_id),
   FOREIGN KEY (student_id) REFERENCES users(user_id)
 );
+
+-- Site-wide settings (feature switches etc.), one JSON document per key.
+CREATE TABLE IF NOT EXISTS settings (
+  setting_key VARCHAR(64) PRIMARY KEY,
+  value       TEXT NOT NULL,
+  updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
