@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { getFeatures } = require('../utils/settings');
-const { loginLimit, loginEmailLimit, registerLimit, forgotLimit, resetLimit } = require('../middleware/rateLimit');
+const { loginLimit, loginEmailLimit, clearLoginLimit, registerLimit, forgotLimit, resetLimit } = require('../middleware/rateLimit');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -86,6 +86,7 @@ router.post('/login', loginLimit, loginEmailLimit, async (req, res) => {
     await db.query("UPDATE users SET role = 'admin' WHERE user_id = ?", [user.user_id]);
     user.role = 'admin';
   }
+  await clearLoginLimit(email); // a successful login resets the brute-force counter
   res.json({ token: signToken(user), user: publicUser(user) });
 });
 
